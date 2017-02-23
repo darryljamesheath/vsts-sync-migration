@@ -55,15 +55,23 @@ namespace VstsSyncMigrator.ConsoleApp
             Version thisVersion = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version;
             Trace.WriteLine(string.Format("Running version detected as {0}", thisVersion), "[Info]");
             Version latestVersion = GetLatestVersion();
-            Trace.TraceInformation("Latest version detected as {0}", latestVersion);
-            Trace.WriteLine(System.Reflection.Assembly.GetExecutingAssembly().GetName().Name, "[Info]");
+            Trace.WriteLine(string.Format("Latest version detected as {0}", latestVersion), "[Info]");
             if (latestVersion > thisVersion)
             {
                 Trace.WriteLine(
-                    string.Format("You are currenlty running version {0} and a newer version ({1}) is available. You should upgrade now using Chocolatey.",
+                    string.Format("You are currenlty running version {0} and a newer version ({1}) is available. You should upgrade now using Chocolatey command 'choco update vsts-sync-migrator' from the command line.",
                     thisVersion, latestVersion
                     ), 
                     "[Warning]");
+#if DEBUG
+
+                Console.WriteLine("Do you want to continue? (y/n)");
+                if (Console.ReadKey().Key != ConsoleKey.Y)
+                {
+                    Trace.WriteLine("User aborted to update version", "[Warning]");
+                    return 2;
+                }
+#endif
             }
             Trace.WriteLine(string.Format("Telemitery Enabled: {0}", Telemetry.Current.IsEnabled().ToString()), "[Info]");
             Trace.WriteLine(string.Format("SessionID: {0}", Telemetry.Current.Context.Session.Id), "[Info]");
@@ -117,7 +125,7 @@ namespace VstsSyncMigrator.ConsoleApp
 
             if (!File.Exists(opts.ConfigFile))
             {
-                Trace.WriteLine("The config file does not exist, nor doe the default 'vstsbulkeditor.json'. Use 'init' to create a configuration file first", "vstsbulkeditor");
+                Trace.WriteLine("The config file does not exist, nor doe the default 'vstsbulkeditor.json'. Use 'init' to create a configuration file first", "[Error]");
                 return 1;
             }
             else
@@ -130,11 +138,11 @@ namespace VstsSyncMigrator.ConsoleApp
                     new FieldMapConfigJsonConverter(),
                     new ProcessorConfigJsonConverter());
             }
-            Trace.WriteLine("Config Loaded, creating engine", "vstsbulkeditor");
+            Trace.WriteLine("Config Loaded, creating engine", "[Info]");
             MigrationEngine me = new MigrationEngine(ec);
-            Trace.WriteLine("Engine created, running...", "vstsbulkeditor");
+            Trace.WriteLine("Engine created, running...", "[Info]");
             me.Run();
-            Trace.WriteLine("Run complete...", "vstsbulkeditor");
+            Trace.WriteLine("Run complete...", "[Info]");
             return 0;
         }
 
@@ -149,7 +157,7 @@ namespace VstsSyncMigrator.ConsoleApp
                 StreamWriter sw = new StreamWriter("vstsbulkeditor.json");
                 sw.WriteLine(json);
                 sw.Close();
-                Trace.WriteLine("New vstsbulkeditor.json file has been created", "vstsbulkeditor");
+                Trace.WriteLine("New vstsbulkeditor.json file has been created", "[Info]");
             }
             return 0;
         }
