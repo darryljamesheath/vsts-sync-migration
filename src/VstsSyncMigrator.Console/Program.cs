@@ -22,6 +22,7 @@ using VstsSyncMigrator.Engine.Configuration;
 using VstsSyncMigrator.Engine.Configuration.FieldMap;
 using VstsSyncMigrator.Engine.Configuration.Processing;
 using Microsoft.ApplicationInsights.DataContracts;
+using NuGet;
 
 namespace VstsSyncMigrator.ConsoleApp
 {
@@ -48,26 +49,34 @@ namespace VstsSyncMigrator.ConsoleApp
             mainTimer.Start();
             //////////////////////////////////////////////////
             Trace.Listeners.Add(new TextWriterTraceListener(Console.Out));
-            Trace.Listeners.Add(new TextWriterTraceListener(string.Format(@"{0}-{1}.log", DateTime.Now.ToString("yyyy-MM-dd-HH-mm-ss"), "MigrationRun"), "myListener"));
+            Trace.Listeners.Add(new TextWriterTraceListener(string.Format(@"{0}-{1}.log", DateTime.Now.ToString("yyyy-MM-dd-HH-mm-ss"), "Run"), "myListener"));
             //////////////////////////////////////////////////
-            Trace.WriteLine(System.Reflection.Assembly.GetExecutingAssembly().GetName().Name, "vstsbulkeditor");
-            Trace.WriteLine(System.Reflection.Assembly.GetExecutingAssembly().GetName().Version.ToString(), "vstsbulkeditor");
-            Trace.WriteLine(string.Format("Telemitery Enabled: {0}", Telemetry.Current.IsEnabled().ToString()), "vstsbulkeditor");
-            Trace.WriteLine(string.Format("SessionID: {0}", Telemetry.Current.Context.Session.Id), "vstsbulkeditor");
-            Trace.WriteLine(string.Format("User: {0}", Telemetry.Current.Context.User.Id), "vstsbulkeditor");
-            Trace.WriteLine(string.Format("Start Time: {0}", startTime.ToUniversalTime()), "vstsbulkeditor");
-            Trace.WriteLine("----------------------------------------------------------------", "vstsbulkeditor");
-            Trace.WriteLine("------------------------------START-----------------------------", "vstsbulkeditor");
-            Trace.WriteLine("----------------------------------------------------------------", "vstsbulkeditor");
+            Trace.WriteLine(System.Reflection.Assembly.GetExecutingAssembly().GetName().Name, "[Info]");
+            Version thisVersion = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version;
+            Trace.WriteLine(string.Format("Running version detected as {0}", thisVersion), "[Info]");
+            Version latestVersion = GetLatestVersion();
+            Trace.TraceInformation("Latest version detected as {0}", latestVersion);
+            Trace.WriteLine(System.Reflection.Assembly.GetExecutingAssembly().GetName().Name, "[Info]");
+            if (latestVersion > thisVersion)
+            {
+                Trace.WriteLine(
+                    string.Format("You are currenlty running version {0} and a newer version ({1}) is available. You should upgrade now using Chocolatey.",
+                    thisVersion, latestVersion
+                    ), 
+                    "[Warning]");
+            }
+            Trace.WriteLine(string.Format("Telemitery Enabled: {0}", Telemetry.Current.IsEnabled().ToString()), "[Info]");
+            Trace.WriteLine(string.Format("SessionID: {0}", Telemetry.Current.Context.Session.Id), "[Info]");
+            Trace.WriteLine(string.Format("User: {0}", Telemetry.Current.Context.User.Id), "[Info]");
+            Trace.WriteLine(string.Format("Start Time: {0}", startTime.ToUniversalTime()), "[Info]");
+            Trace.WriteLine("------------------------------START-----------------------------", "[Info]");
             //////////////////////////////////////////////////
             int result = (int)Parser.Default.ParseArguments<InitOptions, RunOptions>(args).MapResult(
                 (InitOptions opts) => RunInitAndReturnExitCode(opts),
                 (RunOptions opts) => RunExecuteAndReturnExitCode(opts),
                 errs => 1);
             //////////////////////////////////////////////////
-            Trace.WriteLine("----------------------------------------------------------------", "vstsbulkeditor");
-            Trace.WriteLine("-------------------------------END------------------------------", "vstsbulkeditor");
-            Trace.WriteLine("----------------------------------------------------------------", "vstsbulkeditor");
+            Trace.WriteLine("-------------------------------END------------------------------", "[Info]");
             mainTimer.Stop();
             Telemetry.Current.TrackEvent("ApplicationEnd", null,
                 new Dictionary<string, double> {
@@ -79,8 +88,8 @@ namespace VstsSyncMigrator.ConsoleApp
                 // Allow time for flushing:
                 System.Threading.Thread.Sleep(1000);
             }
-            Trace.WriteLine(string.Format("Duration: {0}", mainTimer.Elapsed.ToString("c")), "vstsbulkeditor");
-            Trace.WriteLine(string.Format("End Time: {0}", startTime.ToUniversalTime()), "vstsbulkeditor");
+            Trace.WriteLine(string.Format("Duration: {0}", mainTimer.Elapsed.ToString("c")), "[Info]");
+            Trace.WriteLine(string.Format("End Time: {0}", startTime.ToUniversalTime()), "[Info]");
 #if DEBUG
             Console.ReadKey();
 #endif
@@ -143,6 +152,16 @@ namespace VstsSyncMigrator.ConsoleApp
                 Trace.WriteLine("New vstsbulkeditor.json file has been created", "vstsbulkeditor");
             }
             return 0;
+        }
+
+        private static Version GetLatestVersion()
+        {
+            string packageID = "vsts-sync-migrator";
+
+            //Connect to the official package repository
+            IPackageRepository repo = PackageRepositoryFactory.Default.CreateRepository("https://chocolatey.org/api/v2/");
+            var version = repo.FindPackagesById(packageID).Max(p => p.Version);
+            return new Version(version.ToString());
         }
     }
 }
