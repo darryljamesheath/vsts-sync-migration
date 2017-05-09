@@ -13,7 +13,6 @@ namespace VstsSyncMigrator.Engine
 {
     public class WorkItemMigrationContext : MigrationContextBase
     {
-
         WorkItemMigrationConfig _config;
         MigrationEngine _me;
         List<String> _ignore;
@@ -35,15 +34,11 @@ namespace VstsSyncMigrator.Engine
 
         private void PopulateIgnoreList()
         {
-           _ignore = new List<string>();
-            //ignore.Add("System.CreatedDate");
-            //ignore.Add("System.CreatedBy");
+            _ignore = new List<string>();
             _ignore.Add("System.Rev");
             _ignore.Add("System.AreaId");
             _ignore.Add("System.IterationId");
             _ignore.Add("System.Id");
-            //ignore.Add("System.ChangedDate");
-            //ignore.Add("System.ChangedBy");
             _ignore.Add("System.RevisedDate");
             _ignore.Add("System.AttachedFileCount");
             _ignore.Add("System.TeamProject");
@@ -66,14 +61,14 @@ namespace VstsSyncMigrator.Engine
         {
             Stopwatch stopwatch = new Stopwatch();
             stopwatch.Start();
-            //////////////////////////////////////////////////
+
             WorkItemStoreContext sourceStore = new WorkItemStoreContext(me.Source, WorkItemStoreFlags.BypassRules);
             TfsQueryContext tfsqc = new TfsQueryContext(sourceStore);
             tfsqc.AddParameter("TeamProject", me.Source.Name);
             tfsqc.Query = string.Format(@"SELECT [System.Id], [System.Tags] FROM WorkItems WHERE [System.TeamProject] = @TeamProject {0} ORDER BY [System.ChangedDate] desc", _config.QueryBit);
             WorkItemCollection sourceWIS = tfsqc.Execute();
-            Trace.WriteLine(string.Format("Migrate {0} work items?", sourceWIS.Count),this.Name);
-            //////////////////////////////////////////////////
+            Trace.WriteLine(string.Format("Migrate {0} work items?", sourceWIS.Count), this.Name);
+
             WorkItemStoreContext targetStore = new WorkItemStoreContext(me.Target, WorkItemStoreFlags.BypassRules);
             Project destProject = targetStore.GetProject();
             Trace.WriteLine(string.Format("Found target project as {0}", destProject.Name), this.Name);
@@ -94,7 +89,7 @@ namespace VstsSyncMigrator.Engine
                     // Deside on WIT
                     if (me.WorkItemTypeDefinitions.ContainsKey(sourceWI.Type.Name))
                     {
-                        newwit = CreateAndPopulateWorkItem(_config,sourceWI, destProject, me.WorkItemTypeDefinitions[sourceWI.Type.Name].Map(sourceWI));
+                        newwit = CreateAndPopulateWorkItem(_config, sourceWI, destProject, me.WorkItemTypeDefinitions[sourceWI.Type.Name].Map(sourceWI));
                         if (newwit.Fields.Contains(me.ReflectedWorkItemIdFieldName))
                         {
                             newwit.Fields[me.ReflectedWorkItemIdFieldName].Value = sourceStore.CreateReflectedWorkItemId(sourceWI);
@@ -142,12 +137,8 @@ namespace VstsSyncMigrator.Engine
                 else
                 {
                     Console.WriteLine("...Exists");
-
-                    //  sourceWI.Open();
-                    //  sourceWI.SyncToLatest();
-                    //  sourceWI.Fields["TfsMigrationTool.ReflectedWorkItemId"].Value = destWIFound[0].Id;
-                    //sourceWI.Save();
                 }
+
                 sourceWI.Close();
                 witstopwatch.Stop();
                 elapsedms = elapsedms + witstopwatch.ElapsedMilliseconds;
@@ -158,38 +149,28 @@ namespace VstsSyncMigrator.Engine
                 Trace.WriteLine(string.Format("Average time of {0} per work item and {1} estimated to completion", string.Format(@"{0:s\:fff} seconds", average), string.Format(@"{0:%h} hours {0:%m} minutes {0:s\:fff} seconds", remaining)), this.Name);
                 Trace.Flush();
             }
-            //////////////////////////////////////////////////
+
             stopwatch.Stop();
             Console.WriteLine(@"DONE in {0:%h} hours {0:%m} minutes {0:s\:fff} seconds", stopwatch.Elapsed);
         }
 
-
-        private static bool HasChildPBI(WorkItem sourceWI)
+        private WorkItem CreateAndPopulateWorkItem(WorkItemMigrationConfig config, WorkItem oldWi, Project destProject, String destType)
         {
-            return sourceWI.Title.ToLower().StartsWith("epic") || sourceWI.Title.ToLower().StartsWith("theme");
-        }
-
-        private WorkItem CreateAndPopulateWorkItem(WorkItemMigrationConfig config , WorkItem oldWi, Project destProject, String destType)
-        {
-            var fieldMappingStartTime = DateTime.UtcNow;
             Stopwatch fieldMappingTimer = new Stopwatch();
-
-            bool except = false;
             Trace.Write("... Building", "WorkItemMigrationContext");
-          
 
-
-            // WorkItem newwit = oldWi.Copy(destProject.WorkItemTypes[destType]);
             var NewWorkItemstartTime = DateTime.UtcNow;
             Stopwatch NewWorkItemTimer = new Stopwatch();
             WorkItem newwit = destProject.WorkItemTypes[destType].NewWorkItem();
             NewWorkItemTimer.Stop();
             Telemetry.Current.TrackDependency("TeamService", "NewWorkItem", NewWorkItemstartTime, NewWorkItemTimer.Elapsed, true);
             Trace.WriteLine(string.Format("Dependancy: {0} - {1} - {2} - {3} - {4}", "TeamService", "NewWorkItem", NewWorkItemstartTime, NewWorkItemTimer.Elapsed, true), "WorkItemMigrationContext");
+
             newwit.Title = oldWi.Title;
             newwit.State = oldWi.State;
             newwit.Reason = oldWi.Reason;
-            
+            newwit.Description = oldWi.Description;
+
             foreach (Field f in oldWi.Fields)
             {
                 if (newwit.Fields.Contains(f.ReferenceName) && !_ignore.Contains(f.ReferenceName) && newwit.Fields[f.ReferenceName].IsEditable)
@@ -209,95 +190,126 @@ namespace VstsSyncMigrator.Engine
                 newwit.AreaPath = regex.Replace(oldWi.AreaPath, newwit.Project.Name, 1);
                 newwit.IterationPath = regex.Replace(oldWi.IterationPath, newwit.Project.Name, 1);
             }
-            
-            newwit.Fields["System.ChangedDate"].Value = oldWi.Fields["System.ChangedDate"].Value;
-
-
-            switch (destType)
-            {
-                case "Test Case":
-                    newwit.Fields["Microsoft.VSTS.TCM.Steps"].Value = oldWi.Fields["Microsoft.VSTS.TCM.Steps"].Value;
-                    newwit.Fields["Microsoft.VSTS.Common.Priority"].Value = oldWi.Fields["Microsoft.VSTS.Common.Priority"].Value;
-                    break;
-                default:
-                    break;
-            }
-
-
 
             if (newwit.Fields.Contains("Microsoft.VSTS.Common.BacklogPriority")
                 && newwit.Fields["Microsoft.VSTS.Common.BacklogPriority"].Value != null
                 && !isNumeric(newwit.Fields["Microsoft.VSTS.Common.BacklogPriority"].Value.ToString(),
                 NumberStyles.Any))
-                {
-                    newwit.Fields["Microsoft.VSTS.Common.BacklogPriority"].Value = 10;
-                }
-
-            StringBuilder description = new StringBuilder();
-            description.Append(oldWi.Description);
-            newwit.Description = description.ToString();
-
-            StringBuilder history = new StringBuilder();
-            BuildCommentTable(oldWi, history);
-            BuildFieldTable(oldWi, history);
-            history.Append("<p>Migrated by <a href='http://nkdagility.com'>naked Agility Limited's</a> open source <a href='https://github.com/nkdAgility/VstsMigrator'>VSTS/TFS Migrator</a>.</p>");
-            newwit.History = history.ToString();
-
-            if (except)
             {
-                Trace.WriteLine("...buildErrors", "WorkItemMigrationContext");
-                System.Threading.Thread.Sleep(1000);
+                newwit.Fields["Microsoft.VSTS.Common.BacklogPriority"].Value = 10;
+            }
 
-            }
-            else
-            {
-                Trace.WriteLine("...buildComplete", "WorkItemMigrationContext");
-            }
+            newwit.History = GetHistory(oldWi);
+            
+            Trace.WriteLine("...buildComplete", "WorkItemMigrationContext");
+
             fieldMappingTimer.Stop();
-            Telemetry.Current.TrackMetric( "FieldMappingTime", fieldMappingTimer.ElapsedMilliseconds);
+            Telemetry.Current.TrackMetric("FieldMappingTime", fieldMappingTimer.ElapsedMilliseconds);
             Trace.WriteLine(string.Format("FieldMapOnNewWorkItem: {0} - {1}", NewWorkItemstartTime, fieldMappingTimer.Elapsed.ToString("c")), "WorkItemMigrationContext");
             return newwit;
         }
 
-        private static string ReplaceFirstOccurence(string wordToReplace, string replaceWith, string input)
+        private static string GetHistory(WorkItem oldWi)
         {
-            Regex r = new Regex(wordToReplace, RegexOptions.IgnoreCase);
-            return r.Replace(input, replaceWith, 1);
-        }
-
-
-        private static void BuildFieldTable(WorkItem oldWi, StringBuilder history, bool useHTML = false)
-        {
-            history.Append("<p>Fields from previous Work Item:</p>");
-            foreach (Field f in oldWi.Fields)
+            if (oldWi.Revisions.Count == 0)
             {
-                if (f.Value == null)
-                {
-                    history.AppendLine(string.Format("{0}: null<br />", f.Name));
-                }
-                else
-                {
-                        history.AppendLine(string.Format("{0}: {1}<br />", f.Name, f.Value.ToString()));
-                }
-
+                return string.Empty;
             }
-            history.Append("<p>&nbsp;</p>");
-        }
 
-        private static void BuildCommentTable(WorkItem oldWi, StringBuilder history)
-        {
-            history.Append("<p>Comments from previous work item:</p>");
+            var exceptedFields = new string[]
+            {
+                "History",
+                "Changed By",
+                "Changed Date",
+                "Watermark",
+                "Authorized Date",
+                "Authorized As",
+                "Revised Date"
+            };
+
+            var history = new StringBuilder();
+            history.Append("<p>History from previous work item:</p>");
             history.Append("<table border='1' style='width:100%;border-color:#C0C0C0;'>");
-            foreach (Revision r in oldWi.Revisions)
+
+            for (var i = oldWi.Revisions.Count - 1; i >= 0; i--)
             {
-                if ((string)r.Fields["System.History"].Value != "" && (string)r.Fields["System.ChangedBy"].Value != "Martin Hinshelwood (Adm)")
+                history.Append("<tr>");
+                history.Append("<tr><td style='align:right;width:100%'>");
+
+                // add who and when
+                var revision = oldWi.Revisions[i];
+                history.AppendFormat("<p><b>{0} on {1}</b></p>",
+                    revision.Fields["System.ChangedBy"].Value,
+                    DateTime.Parse(revision.Fields["System.ChangedDate"].Value.ToString()).ToString("F"));
+
+                // add comment if one
+                var historyValue = revision.Fields["System.History"].Value as string;
+                if (!string.IsNullOrEmpty(historyValue))
                 {
-                    r.WorkItem.Open();
-                    history.AppendFormat("<tr><td style='align:right;width:100%'><p><b>{0} on {1}:</b></p><p>{2}</p></td></tr>", r.Fields["System.ChangedBy"].Value, DateTime.Parse(r.Fields["System.ChangedDate"].Value.ToString()).ToLongDateString(), r.Fields["System.History"].Value);
+                    history.AppendFormat("<p>{0}</p>", historyValue);
                 }
+
+                // add changed fields table (except certain fields)
+                history.Append("<table border='1' style='border-color:#C0C0C0;'>");
+                history.Append("<tr><th>Field</th><th>Old Value</th><th>New Value</th></tr>");
+
+                var externalLinksChanged = false;
+                var fields = revision.Fields;
+                foreach (Field field in fields)
+                {
+                    if (exceptedFields.Contains(field.Name))
+                    {
+                        continue;
+                    }
+
+                    var original = field.OriginalValue == null ? string.Empty : field.OriginalValue.ToString();
+                    var value = field.Value == null ? string.Empty : field.Value.ToString();
+                    if (original != value)
+                    {
+                        if (field.Name == "External Link Count")
+                        {
+                            externalLinksChanged = true;
+                        }
+
+                        history.AppendFormat("<tr><td>{0}</td><td>{1}</td><td>{2}</td></tr>", field.Name, original, value);
+                    }
+                }
+
+                history.Append("</table>");
+
+                var links = revision.Links;
+                if (revision.Links.Count > 0 && externalLinksChanged)
+                {
+                    history.Append("<table border='1' style='border-color:#C0C0C0;'>");
+                    history.Append("<tr><th>Link Type</th><th>Description</th></tr>");
+
+                    foreach (Link link in links)
+                    {
+                        var description = string.Empty;
+                        switch (link.BaseType)
+                        {
+                            case BaseLinkType.ExternalLink:
+                                description = ((ExternalLink)link).LinkedArtifactUri;
+                                break;
+
+                            case BaseLinkType.Hyperlink:
+                                description = ((Hyperlink)link).Location;
+                                break;
+                        }
+
+                        history.AppendFormat("<tr><td>{0}</td><td>{1}</td></tr>", link.BaseType.ToString(), description);
+                    }
+
+                    history.Append("</table>");
+                }
+
+                history.Append("</td></tr>");
             }
+
             history.Append("</table>");
-            history.Append("<p>&nbsp;</p>");
+            history.Append("<p>Migrated by <a href='http://nkdagility.com'>naked Agility Limited's</a> open source <a href='https://github.com/nkdAgility/VstsMigrator'>VSTS/TFS Migrator</a>.</p>");
+
+            return history.ToString();
         }
 
         static bool isNumeric(string val, NumberStyles NumberStyle)
@@ -306,7 +318,5 @@ namespace VstsSyncMigrator.Engine
             return Double.TryParse(val, NumberStyle,
                 System.Globalization.CultureInfo.CurrentCulture, out result);
         }
-
-
     }
 }

@@ -43,6 +43,8 @@ namespace VstsSyncMigrator.ConsoleApp
 
         public static int Main(string[] args)
         {
+            // args = new string[] { "execute", "-c", "REMS.json" };
+
             Telemetry.Current.TrackEvent("ApplicationStart");
             AppDomain.CurrentDomain.UnhandledException += CurrentDomain_UnhandledException;
             DateTime startTime = DateTime.Now;
@@ -68,12 +70,12 @@ namespace VstsSyncMigrator.ConsoleApp
                         "[Warning]");
 #if DEBUG
 
-                    Console.WriteLine("Do you want to continue? (y/n)");
-                    if (Console.ReadKey().Key != ConsoleKey.Y)
-                    {
-                        Trace.WriteLine("User aborted to update version", "[Warning]");
-                        return 2;
-                    }
+                    //Console.WriteLine("Do you want to continue? (y/n)");
+                    //if (Console.ReadKey().Key != ConsoleKey.Y)
+                    //{
+                    //    Trace.WriteLine("User aborted to update version", "[Warning]");
+                    //    return 2;
+                    //}
 #endif
                 }
             }
@@ -138,7 +140,7 @@ namespace VstsSyncMigrator.ConsoleApp
                 StreamReader sr = new StreamReader(opts.ConfigFile);
                 string vstsbulkeditorjson = sr.ReadToEnd();
                 sr.Close();
-                ec = JsonConvert.DeserializeObject<EngineConfiguration>(vstsbulkeditorjson, 
+                ec = JsonConvert.DeserializeObject<EngineConfiguration>(vstsbulkeditorjson,
                     new FieldMapConfigJsonConverter(),
                     new ProcessorConfigJsonConverter());
             }
