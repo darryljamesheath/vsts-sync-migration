@@ -309,6 +309,12 @@ namespace VstsSyncMigrator.Engine
             history.Append("</table>");
             history.Append("<p>Migrated by <a href='http://nkdagility.com'>naked Agility Limited's</a> open source <a href='https://github.com/nkdAgility/VstsMigrator'>VSTS/TFS Migrator</a>.</p>");
 
+            // ensure not too big < 1048575
+            if (history.Length > 1048575)
+            {
+                history = history.Remove(1048575, history.Length - 1048576);
+            }
+
             return history.ToString();
         }
 
