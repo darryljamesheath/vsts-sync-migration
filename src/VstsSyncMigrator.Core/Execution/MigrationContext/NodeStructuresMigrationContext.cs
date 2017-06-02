@@ -1,4 +1,8 @@
 ﻿using Microsoft.TeamFoundation.Server;
+using Microsoft.TeamFoundation.WorkItemTracking.WebApi;
+using Microsoft.TeamFoundation.WorkItemTracking.WebApi.Models;
+using Microsoft.VisualStudio.Services.Client;
+using Microsoft.VisualStudio.Services.Common;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -10,8 +14,9 @@ namespace VstsSyncMigrator.Engine
 {
     public class NodeStructuresMigrationContext : MigrationContextBase
     {
-        NodeStructuresMigrationConfig config;
-
+        private readonly NodeStructuresMigrationConfig config;
+        private ICommonStructureService sourceCss;
+        
         public override string Name
         {
             get
@@ -27,17 +32,14 @@ namespace VstsSyncMigrator.Engine
 
         internal override void InternalExecute()
         {
-            //////////////////////////////////////////////////
-            ICommonStructureService sourceCss = (ICommonStructureService)me.Source.Collection.GetService(typeof(ICommonStructureService));
+            sourceCss = me.Source.Collection.GetService<ICommonStructureService>();
+
             ProjectInfo sourceProjectInfo = sourceCss.GetProjectFromName(me.Source.Name);
             NodeInfo[] sourceNodes = sourceCss.ListStructures(sourceProjectInfo.Uri);
-            //////////////////////////////////////////////////
             ICommonStructureService targetCss = (ICommonStructureService)me.Target.Collection.GetService(typeof(ICommonStructureService));
-            //////////////////////////////////////////////////
+
             ProcessCommonStructure("Area", sourceNodes, targetCss, sourceCss);
-            //////////////////////////////////////////////////
-            ProcessCommonStructure("Iteration", sourceNodes, targetCss, sourceCss);
-            //////////////////////////////////////////////////
+            ProcessCommonStructureIterations(sourceNodes, sourceCss);
         }
 
         private void ProcessCommonStructure(string treeType, NodeInfo[] sourceNodes, ICommonStructureService targetCss, ICommonStructureService sourceCss)
@@ -88,6 +90,77 @@ namespace VstsSyncMigrator.Engine
             }
             return node;
         }
-    
+
+        private void ProcessCommonStructureIterations(NodeInfo[] sourceNodes, ICommonStructureService sourceCss)
+        {
+            var creds = new VssClientCredentials(true) { PromptType = CredentialPromptType.PromptIfNeeded };
+            var connection = new VssConnection(new Uri(me.Target.Collection.Name), creds);
+            var client = connection.GetClient<WorkItemTrackingHttpClient>();
+
+            var sourceNode = (from n in sourceNodes where n.Path.Contains("Iteration") select n).Single();
+            var sourceTree = sourceCss.GetNodesXml(new string[] { sourceNode.Uri }, true);
+
+            var rootPath = string.Empty;
+            if (config.PrefixProjectToNodes)
+            {
+                CreateIterationNode(client, me.Source.Name, sourceNode.StartDate, sourceNode.FinishDate, null);
+                rootPath = me.Source.Name;
+            }
+
+            CreateIterationNodes(client, sourceTree.ChildNodes[0].ChildNodes[0].ChildNodes, rootPath);
+        }
+
+        private void CreateIterationNodes(WorkItemTrackingHttpClient client, XmlNodeList nodeList, string path)
+        {
+            foreach (XmlNode xmlNode in nodeList)
+            {
+                var nodeId = GetNodeID(xmlNode.OuterXml);
+                var nodeInfo = sourceCss.GetNode(nodeId);
+                var parentPath = CreateIterationNode(client, nodeInfo.Name, nodeInfo.StartDate, nodeInfo.FinishDate, path);
+
+                if (xmlNode.HasChildNodes)
+                {
+                    CreateIterationNodes(client, xmlNode.ChildNodes[0].ChildNodes, parentPath);
+                }
+            }
+        }
+
+        private string CreateIterationNode(WorkItemTrackingHttpClient client, string nodeName, DateTime? startDate, DateTime? finishDate, string path)
+        {
+            Trace.WriteLine($"node:{nodeName} for path:{path} - creating", "Iterations");
+
+            var node = new WorkItemClassificationNode
+            {
+                StructureType = TreeNodeStructureType.Iteration,
+                Name = nodeName,
+            };
+
+            if (startDate.HasValue && finishDate.HasValue)
+            {
+                node.Attributes = new Dictionary<string, object>();
+                node.Attributes.Add("startDate", startDate);
+                node.Attributes.Add("finishDate", finishDate);
+            }
+
+            var newnode = client.CreateOrUpdateClassificationNodeAsync(node, me.Target.Name, TreeStructureGroup.Iterations, path).Result;
+            if (newnode == null)
+            {
+                Trace.WriteLine($"node:{nodeName} for path:{path} - failed ", "Iterations");
+            }
+            else
+            {
+                Trace.WriteLine($"node:{nodeName} for path:{path} - success", "Iterations");
+            }
+
+            return string.Concat(path ?? string.Empty, "\\", nodeName);
+        }
+
+        private string GetNodeID(string xml)
+        {
+            var first = "NodeID=\"";
+            var start = xml.IndexOf(first) + first.Length;
+            var end = xml.IndexOf("\"", start);
+            return xml.Substring(start, (end - start));
+        }
     }
 }
