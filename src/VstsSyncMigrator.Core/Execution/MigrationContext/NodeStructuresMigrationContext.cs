@@ -127,7 +127,7 @@ namespace VstsSyncMigrator.Engine
 
         private string CreateIterationNode(WorkItemTrackingHttpClient client, string nodeName, DateTime? startDate, DateTime? finishDate, string path)
         {
-            Trace.WriteLine($"node:{nodeName} for path:{path} - creating", "Iterations");
+            Trace.WriteLine($"node:{nodeName} for path:{path} - checking...", "Iterations");
 
             var node = new WorkItemClassificationNode
             {
@@ -142,17 +142,33 @@ namespace VstsSyncMigrator.Engine
                 node.Attributes.Add("finishDate", finishDate);
             }
 
-            var newnode = client.CreateOrUpdateClassificationNodeAsync(node, me.Target.Name, TreeStructureGroup.Iterations, path).Result;
-            if (newnode == null)
+            var newPath = string.Concat(path ?? string.Empty, "\\", nodeName);
+
+            try
             {
-                Trace.WriteLine($"node:{nodeName} for path:{path} - failed ", "Iterations");
+                var newPathNode = client.GetClassificationNodeAsync(me.Target.Name, TreeStructureGroup.Iterations, newPath).Result;
+                if (newPathNode != null)
+                {
+                    Trace.WriteLine($"node:{nodeName} for path:{path} - checking...found", "Iterations");
+                }
             }
-            else
+            catch (Exception)
             {
-                Trace.WriteLine($"node:{nodeName} for path:{path} - success", "Iterations");
+                // not the best but only way to determine if node doesn't already exist.
+                Trace.WriteLine($"node:{nodeName} for path:{path} - checking...not found so creating...", "Iterations");
+
+                var newnode = client.CreateOrUpdateClassificationNodeAsync(node, me.Target.Name, TreeStructureGroup.Iterations, path).Result;
+                if (newnode == null)
+                {
+                    Trace.WriteLine($"node:{nodeName} for path:{path} - checking...not found so creating...failed", "Iterations");
+                }
+                else
+                {
+                    Trace.WriteLine($"node:{nodeName} for path:{path} - checking...not found so creating...success", "Iterations");
+                }
             }
 
-            return string.Concat(path ?? string.Empty, "\\", nodeName);
+            return newPath;
         }
 
         private string GetNodeID(string xml)
