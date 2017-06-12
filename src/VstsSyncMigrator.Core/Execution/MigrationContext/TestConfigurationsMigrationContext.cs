@@ -1,19 +1,13 @@
-﻿using Microsoft.TeamFoundation.Client;
-using Microsoft.TeamFoundation.TestManagement.Client;
-using Microsoft.TeamFoundation.WorkItemTracking.Client;
-using System;
+﻿using Microsoft.TeamFoundation.TestManagement.Client;
 using System.Diagnostics;
-using VstsSyncMigrator.Engine.ComponentContext;
 using System.Linq;
+using VstsSyncMigrator.Engine.ComponentContext;
 using VstsSyncMigrator.Engine.Configuration.Processing;
 
 namespace VstsSyncMigrator.Engine
 {
     public class TestConfigurationsMigrationContext : MigrationContextBase
     {
-
-        // http://blogs.microsoft.co.il/shair/2015/02/02/tfs-api-part-56-test-configurations/
-
         public override string Name
         {
             get
@@ -21,56 +15,52 @@ namespace VstsSyncMigrator.Engine
                 return "TestConfigurationsMigrationContext";
             }
         }
+
         public TestConfigurationsMigrationContext(MigrationEngine me, TestConfigurationsMigrationConfig config) : base(me, config)
         {
-
         }
 
         internal override void InternalExecute()
         {
-            WorkItemStoreContext sourceWisc = new WorkItemStoreContext(me.Source, WorkItemStoreFlags.None);
-            TestManagementContext SourceTmc = new TestManagementContext(me.Source);
+            var sourceTmc = new TestManagementContext(me.Source);
+            var targetTmc = new TestManagementContext(me.Target);
 
-            WorkItemStoreContext targetWisc = new WorkItemStoreContext(me.Target, WorkItemStoreFlags.BypassRules);
-            TestManagementContext targetTmc = new TestManagementContext(me.Target);
-
-
-            ITestConfigurationCollection tc = SourceTmc.Project.TestConfigurations.Query("Select * From TestConfiguration");
-            Trace.WriteLine(string.Format("Plan to copy {0} Configurations?", tc.Count));
+            ITestConfigurationCollection tc = sourceTmc.Project.TestConfigurations.Query("Select * From TestConfiguration");
+            Trace.WriteLine($"Plan to copy {tc.Count} Configurations", "TestConfigurationMigration");
 
             foreach (var sourceTestConf in tc)
             {
-                Trace.WriteLine("Copy Configuration {0} - ", sourceTestConf.Name);
-                ITestConfiguration targetTc = GetCon(targetTmc.Project.TestConfigurations, sourceTestConf.Name);
+                Trace.WriteLine($"{sourceTestConf.Name} - Attempting to copy configuration", "TestConfigurationMigration");
+
+                var targetTc = GetCon(targetTmc.Project.TestConfigurations, sourceTestConf.Name);
                 if (targetTc != null)
                 {
-                    Trace.WriteLine("    Found {0} - ", sourceTestConf.Name);  
-                    // Move on
-                } else
-                {
-                    Trace.WriteLine("    Create new {0} - ", sourceTestConf.Name);
-                    targetTc = targetTmc.Project.TestConfigurations.Create();
-                    targetTc.AreaPath = sourceTestConf.AreaPath.Replace(me.Source.Name, me.Target.Name);
-                    targetTc.Description = sourceTestConf.Description;
-                    targetTc.IsDefault = sourceTestConf.IsDefault;
-                    targetTc.Name = sourceTestConf.Name;
-                    foreach (var val in targetTc.Values)
-                    {
-                        if (!targetTc.Values.ContainsKey(val.Key)) {
-                            targetTc.Values.Add(val);
-                        }
-                    }
-                    targetTc.State = sourceTestConf.State;
-                    targetTc.Save();
-                    Trace.WriteLine(string.Format("    Saved {0} - ", targetTc.Name));
+                    Trace.WriteLine($"{sourceTestConf.Name} - Already exists in target", "TestConfigurationMigration");
+                    continue;
                 }
-            }
 
+                Trace.WriteLine($"{sourceTestConf.Name} - Creating new configuration in target", "TestConfigurationMigration");
+                targetTc = targetTmc.Project.TestConfigurations.Create();
+                targetTc.AreaPath = sourceTestConf.AreaPath.Replace(me.Source.Name, me.Target.Name);
+                targetTc.Description = sourceTestConf.Description;
+                targetTc.IsDefault = sourceTestConf.IsDefault;
+                targetTc.Name = sourceTestConf.Name;
+                targetTc.State = sourceTestConf.State;
+
+                foreach (var val in sourceTestConf.Values)
+                {
+                    targetTc.Values.Add(val);
+                }
+
+                targetTc.Save();
+
+                Trace.WriteLine($"{sourceTestConf.Name} - Created in target as {targetTc.Name}", "TestConfigurationMigration");
+            }
         }
+
         internal ITestConfiguration GetCon(ITestConfigurationHelper tch, string configToFind)
         {
             return (from tv in tch.Query("Select * From TestConfiguration") where tv.Name == configToFind select tv).SingleOrDefault();
         }
-
     }
 }
