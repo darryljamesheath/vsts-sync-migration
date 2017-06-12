@@ -9,19 +9,19 @@ namespace VstsSyncMigrator.Engine
 {
     public class WorkItemStoreContext
     {
-        private WorkItemStoreFlags bypassRules;
-        private ITeamProjectContext targetTfs;
-        private WorkItemStore wistore;
-        private Dictionary<int, WorkItem> foundWis;
+        private readonly ITeamProjectContext targetTfs;
+        private readonly WorkItemStore wistore;
+        private readonly Dictionary<int, WorkItem> foundWis;
+        private WorkItemCollection existingItems;
 
-        public WorkItemStore Store { get { return wistore; }}
+        public WorkItemStore Store { get { return wistore; } }
 
         public WorkItemStoreContext(ITeamProjectContext targetTfs, WorkItemStoreFlags bypassRules)
         {
             var startTime = DateTime.UtcNow;
-            var timer = System.Diagnostics.Stopwatch.StartNew();
+            var timer = Stopwatch.StartNew();
             this.targetTfs = targetTfs;
-            this.bypassRules = bypassRules;
+
             try
             {
                 wistore = new WorkItemStore(targetTfs.Collection, bypassRules);
@@ -40,9 +40,10 @@ namespace VstsSyncMigrator.Engine
                             { "Time",timer.ElapsedMilliseconds }
                        });
                 Trace.TraceWarning(string.Format("  [EXCEPTION] {0}", ex.Message));
-                throw ex;
+
+                throw;
             }
-           
+
             foundWis = new Dictionary<int, WorkItem>();
         }
 
@@ -55,6 +56,7 @@ namespace VstsSyncMigrator.Engine
         {
             return string.Format("{0}/{1}/{2}", wi.Store.TeamProjectCollection.Uri, wi.Project.Name, wi.Id);
         }
+
         public int GetReflectedWorkItemId(WorkItem wi, string reflectedWotkItemIdField)
         {
             string rwiid = wi.Fields[reflectedWotkItemIdField].Value.ToString();
@@ -65,44 +67,23 @@ namespace VstsSyncMigrator.Engine
             return 0;
         }
 
-  
-
-        public WorkItem FindReflectedWorkItem(WorkItem workItemToFind, string reflectedWotkItemIdField, bool cache)
+        public WorkItem FindReflectedWorkItem(WorkItem workItemToFind, string reflectedWorkItemIdField, bool cache)
         {
-            string ReflectedWorkItemId = CreateReflectedWorkItemId(workItemToFind);
-            WorkItem found = null;
-            if (foundWis.ContainsKey(workItemToFind.Id))
+            if (existingItems == null)
             {
-                return foundWis[workItemToFind.Id];
+                LoadAllExistingItems(reflectedWorkItemIdField);
             }
-            if (workItemToFind.Fields.Contains(reflectedWotkItemIdField) && !string.IsNullOrEmpty( workItemToFind.Fields[reflectedWotkItemIdField].Value.ToString()))
+
+            string reflectedWorkItemId = CreateReflectedWorkItemId(workItemToFind);
+            foreach(WorkItem existingItem in existingItems)
             {
-                string rwiid = workItemToFind.Fields[reflectedWotkItemIdField].Value.ToString();
-                int idToFind = GetReflectedWorkItemId(workItemToFind, reflectedWotkItemIdField);
-                if (idToFind == 0)
+                if (existingItem.Fields[reflectedWorkItemIdField].Value.ToString() == reflectedWorkItemId)
                 {
-                    found = null;
+                    return existingItem;
                 }
-                else
-                {
-                    found = Store.GetWorkItem(idToFind);
-                    if (!(found.Fields[reflectedWotkItemIdField].Value.ToString() == rwiid))
-                    {
-                        found = null;
-                    }
-                }                
             }
-            if (found == null) { found = FindReflectedWorkItemByReflectedWorkItemId(ReflectedWorkItemId, reflectedWotkItemIdField); }
-            if (!workItemToFind.Fields.Contains(reflectedWotkItemIdField))
-            {
-                if (found == null) { found = FindReflectedWorkItemByMigrationRef(ReflectedWorkItemId); } // Too slow!
-                //if (found == null) { found = FindReflectedWorkItemByTitle(workItemToFind.Title); }
-            }
-            if (found != null && cache) 
-            {
-                foundWis.Add(workItemToFind.Id, found); /// TODO MENORY LEEK! LEAK
-            }
-            return found;
+
+            return null;
         }
 
         public WorkItem FindReflectedWorkItemByReflectedWorkItemId(WorkItem refWi, string reflectedWotkItemIdField)
@@ -110,29 +91,19 @@ namespace VstsSyncMigrator.Engine
             return FindReflectedWorkItemByReflectedWorkItemId(CreateReflectedWorkItemId(refWi), reflectedWotkItemIdField);
         }
 
+        public void LoadAllExistingItems(string reflectedWorkItemIdField)
+        {
+            var query = new TfsQueryContext(this);
+            query.Query = $"SELECT [System.Id] FROM WorkItems  WHERE [System.TeamProject]=@TeamProject AND [{reflectedWorkItemIdField}] != ''";
+            query.AddParameter("TeamProject", targetTfs.Name);
+            existingItems = query.Execute();
+        }
+
         public WorkItem FindReflectedWorkItemByReflectedWorkItemId(string refId, string reflectedWotkItemIdField)
         {
             TfsQueryContext query = new TfsQueryContext(this);
             query.Query = string.Format(@"SELECT [System.Id] FROM WorkItems  WHERE [System.TeamProject]=@TeamProject AND [{0}] = @idToFind", reflectedWotkItemIdField);
             query.AddParameter("idToFind", refId.ToString());
-            query.AddParameter("TeamProject", this.targetTfs.Name);
-            return FindWorkItemByQuery(query);
-        }
-
-        public WorkItem FindReflectedWorkItemByMigrationRef(string refId)
-        {
-            TfsQueryContext query = new TfsQueryContext(this);
-            query.Query = @"SELECT [System.Id] FROM WorkItems  WHERE [System.TeamProject]=@TeamProject AND [System.Description] Contains @KeyToFind";
-            query.AddParameter("KeyToFind", string.Format("##REF##{0}##", refId));
-            query.AddParameter("TeamProject", this.targetTfs.Name);
-            return FindWorkItemByQuery(query);
-        }
-
-        public WorkItem FindReflectedWorkItemByTitle(string title)
-        {
-            TfsQueryContext query = new TfsQueryContext(this);
-            query.Query = @"SELECT [System.Id] FROM WorkItems  WHERE [System.TeamProject]=@TeamProject AND [System.Title] = @TitleToFind";
-            query.AddParameter("TitleToFind", title);
             query.AddParameter("TeamProject", this.targetTfs.Name);
             return FindWorkItemByQuery(query);
         }
@@ -147,7 +118,5 @@ namespace VstsSyncMigrator.Engine
             }
             return newFound[0];
         }
-
-
     }
 }

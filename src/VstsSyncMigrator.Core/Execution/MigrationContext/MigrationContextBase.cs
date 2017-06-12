@@ -1,11 +1,6 @@
-﻿using Microsoft.ApplicationInsights;
-using Microsoft.TeamFoundation.WorkItemTracking.Client;
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.IO;
-using System.Linq;
-using System.Net;
 using System.Text.RegularExpressions;
 using VstsSyncMigrator.Engine.Configuration.Processing;
 
@@ -16,8 +11,7 @@ namespace VstsSyncMigrator.Engine
         internal MigrationEngine me;
         ProcessingStatus status = ProcessingStatus.None;
 
-
-        public MigrationContextBase(MigrationEngine me, ITfsProcessingConfig config)
+        protected MigrationContextBase(MigrationEngine me, ITfsProcessingConfig config)
         {
             this.me = me;
         }
@@ -45,7 +39,7 @@ namespace VstsSyncMigrator.Engine
             Trace.TraceInformation(string.Format(" Migration Context Start {0} ", Name));
             Stopwatch executeTimer = new Stopwatch();
             executeTimer.Start();
-            //////////////////////////////////////////////////
+
             try
             {
                 status = ProcessingStatus.Running;
@@ -83,7 +77,8 @@ namespace VstsSyncMigrator.Engine
                             { "MigrationContextTime", executeTimer.ElapsedMilliseconds }
                       });
                 Trace.TraceWarning(string.Format("  [EXCEPTION] {0}", ex.Message));
-                throw ex;
+
+                throw;
             }
         }
 
@@ -91,28 +86,13 @@ namespace VstsSyncMigrator.Engine
 
         internal string NodeStructreSourceToTarget(string input)
         {
-            //input = [sourceTeamProject]\[AreaPath]
             return string.Format("{0}\\{1}", me.Target.Name, input);
-
-
-            //Regex r = new Regex(source.Name, RegexOptions.IgnoreCase);
-
-
-            //// Output = [targetTeamProject]\[sourceTeamProject]\[AreaPath]
-            //return r.Replace(input, target.Name, 1);
-
         }
 
         internal string ReplaceFirstInstanceOf(string input)
         {
-            //input = [sourceTeamProject]\[AreaPath]
             Regex r = new Regex(me.Source.Name, RegexOptions.IgnoreCase);
-            //// Output = [targetTeamProject]\[sourceTeamProject]\[AreaPath]
             return r.Replace(input, me.Target.Name, 1);
-
         }
     }
-
-
-
 }

@@ -13,9 +13,9 @@ namespace VstsSyncMigrator.Engine
 {
     public class WorkItemMigrationContext : MigrationContextBase
     {
-        WorkItemMigrationConfig _config;
-        MigrationEngine _me;
-        List<String> _ignore;
+        private readonly WorkItemMigrationConfig _config;
+        private readonly MigrationEngine _me;
+        private readonly List<String> _ignore;
 
         public override string Name
         {
@@ -29,12 +29,12 @@ namespace VstsSyncMigrator.Engine
         {
             _me = me;
             _config = config;
+            _ignore = new List<string>();
             PopulateIgnoreList();
         }
 
         private void PopulateIgnoreList()
         {
-            _ignore = new List<string>();
             _ignore.Add("System.Rev");
             _ignore.Add("System.AreaId");
             _ignore.Add("System.IterationId");
@@ -54,7 +54,6 @@ namespace VstsSyncMigrator.Engine
             _ignore.Add("System.BoardColumn");
             _ignore.Add("System.BoardColumnDone");
             _ignore.Add("System.BoardLane");
-            _ignore.Add("SLB.SWT.DateOfClientFeedback");
         }
 
         internal override void InternalExecute()
@@ -65,7 +64,7 @@ namespace VstsSyncMigrator.Engine
             WorkItemStoreContext sourceStore = new WorkItemStoreContext(me.Source, WorkItemStoreFlags.BypassRules);
             TfsQueryContext tfsqc = new TfsQueryContext(sourceStore);
             tfsqc.AddParameter("TeamProject", me.Source.Name);
-            tfsqc.Query = string.Format(@"SELECT [System.Id], [System.Tags] FROM WorkItems WHERE [System.TeamProject] = @TeamProject {0} ORDER BY [System.ChangedDate] desc", _config.QueryBit);
+            tfsqc.Query = string.Format(@"SELECT [System.Id] FROM WorkItems WHERE [System.TeamProject] = @TeamProject {0} ORDER BY [System.ChangedDate] desc", _config.QueryBit);
             WorkItemCollection sourceWIS = tfsqc.Execute();
             Trace.WriteLine(string.Format("Migrate {0} work items?", sourceWIS.Count), this.Name);
 
@@ -76,50 +75,61 @@ namespace VstsSyncMigrator.Engine
             int current = sourceWIS.Count;
             int count = 0;
             long elapsedms = 0;
+
             foreach (WorkItem sourceWI in sourceWIS)
             {
                 Stopwatch witstopwatch = new Stopwatch();
                 witstopwatch.Start();
-                WorkItem targetFound;
-                targetFound = targetStore.FindReflectedWorkItem(sourceWI, me.ReflectedWorkItemIdFieldName, false);
-                Trace.WriteLine(string.Format("{0} - Migrating: {1}-{2}", current, sourceWI.Id, sourceWI.Type.Name), this.Name);
+
+                WorkItem targetFound = targetStore.FindReflectedWorkItem(sourceWI, me.ReflectedWorkItemIdFieldName, false);
+                Trace.WriteLine(string.Format("{0} - Migrating: {1}-{2}", current, sourceWI.Id, sourceWI.Type.Name), Name);
+
                 if (targetFound == null)
                 {
-                    WorkItem newwit = null;
-                    // Deside on WIT
-                    if (me.WorkItemTypeDefinitions.ContainsKey(sourceWI.Type.Name))
+                    // Decide on WIT
+                    if (!me.WorkItemTypeDefinitions.ContainsKey(sourceWI.Type.Name))
                     {
-                        newwit = CreateAndPopulateWorkItem(_config, sourceWI, destProject, me.WorkItemTypeDefinitions[sourceWI.Type.Name].Map(sourceWI));
-                        if (newwit.Fields.Contains(me.ReflectedWorkItemIdFieldName))
-                        {
-                            newwit.Fields[me.ReflectedWorkItemIdFieldName].Value = sourceStore.CreateReflectedWorkItemId(sourceWI);
-                        }
-                        me.ApplyFieldMappings(sourceWI, newwit);
-                        ArrayList fails = newwit.Validate();
-                        foreach (Field f in fails)
-                        {
-                            Trace.WriteLine(string.Format("{0} - Invalid: {1}-{2}-{3}", current, sourceWI.Id, sourceWI.Type.Name, f.ReferenceName), this.Name);
-                        }
+                        Trace.WriteLine("...not supported", Name);
+                        continue;
                     }
-                    else
+
+                    WorkItem newwit = CreateAndPopulateWorkItem(_config, sourceWI, destProject, me.WorkItemTypeDefinitions[sourceWI.Type.Name].Map(sourceWI));
+                    if (newwit.Fields.Contains(me.ReflectedWorkItemIdFieldName))
                     {
-                        Trace.WriteLine("...not supported", this.Name);
+                        newwit.Fields[me.ReflectedWorkItemIdFieldName].Value = sourceStore.CreateReflectedWorkItemId(sourceWI);
+                    }
+
+                    me.ApplyFieldMappings(sourceWI, newwit);
+
+                    ArrayList fails = newwit.Validate();
+                    foreach (Field f in fails)
+                    {
+                        Trace.WriteLine(string.Format("{0} - Invalid: {1}-{2}-{3}", current, sourceWI.Id, sourceWI.Type.Name, f.ReferenceName), this.Name);
                     }
 
                     if (newwit != null)
                     {
-
                         try
                         {
-                            if (_config.UpdateCreatedDate) { newwit.Fields["System.CreatedDate"].Value = sourceWI.Fields["System.CreatedDate"].Value; }
-                            if (_config.UpdateCreatedBy) { newwit.Fields["System.CreatedBy"].Value = sourceWI.Fields["System.CreatedBy"].Value; }
+                            if (_config.UpdateCreatedDate)
+                            {
+                                newwit.Fields["System.CreatedDate"].Value = sourceWI.Fields["System.CreatedDate"].Value;
+                            }
+
+                            if (_config.UpdateCreatedBy)
+                            {
+                                newwit.Fields["System.CreatedBy"].Value = sourceWI.Fields["System.CreatedBy"].Value;
+                            }
+
                             newwit.Save();
                             newwit.Close();
+
                             Trace.WriteLine(string.Format("...Saved as {0}", newwit.Id), this.Name);
                             if (sourceWI.Fields.Contains(me.ReflectedWorkItemIdFieldName) && _config.UpdateSoureReflectedId)
                             {
                                 sourceWI.Fields[me.ReflectedWorkItemIdFieldName].Value = targetStore.CreateReflectedWorkItemId(newwit);
                             }
+
                             sourceWI.Save();
                             Trace.WriteLine(string.Format("...and Source Updated {0}", sourceWI.Id), this.Name);
                         }
@@ -166,11 +176,6 @@ namespace VstsSyncMigrator.Engine
             Telemetry.Current.TrackDependency("TeamService", "NewWorkItem", NewWorkItemstartTime, NewWorkItemTimer.Elapsed, true);
             Trace.WriteLine(string.Format("Dependancy: {0} - {1} - {2} - {3} - {4}", "TeamService", "NewWorkItem", NewWorkItemstartTime, NewWorkItemTimer.Elapsed, true), "WorkItemMigrationContext");
 
-            newwit.Title = oldWi.Title;
-            newwit.State = oldWi.State;
-            newwit.Reason = oldWi.Reason;
-            newwit.Description = oldWi.Description;
-
             foreach (Field f in oldWi.Fields)
             {
                 if (newwit.Fields.Contains(f.ReferenceName) && !_ignore.Contains(f.ReferenceName) && newwit.Fields[f.ReferenceName].IsEditable)
@@ -193,19 +198,19 @@ namespace VstsSyncMigrator.Engine
 
             if (newwit.Fields.Contains("Microsoft.VSTS.Common.BacklogPriority")
                 && newwit.Fields["Microsoft.VSTS.Common.BacklogPriority"].Value != null
-                && !isNumeric(newwit.Fields["Microsoft.VSTS.Common.BacklogPriority"].Value.ToString(),
-                NumberStyles.Any))
+                && !isNumeric(newwit.Fields["Microsoft.VSTS.Common.BacklogPriority"].Value.ToString(), NumberStyles.Any))
             {
                 newwit.Fields["Microsoft.VSTS.Common.BacklogPriority"].Value = 10;
             }
 
             newwit.History = GetHistory(oldWi);
-            
+
             Trace.WriteLine("...buildComplete", "WorkItemMigrationContext");
 
             fieldMappingTimer.Stop();
             Telemetry.Current.TrackMetric("FieldMappingTime", fieldMappingTimer.ElapsedMilliseconds);
             Trace.WriteLine(string.Format("FieldMapOnNewWorkItem: {0} - {1}", NewWorkItemstartTime, fieldMappingTimer.Elapsed.ToString("c")), "WorkItemMigrationContext");
+
             return newwit;
         }
 
