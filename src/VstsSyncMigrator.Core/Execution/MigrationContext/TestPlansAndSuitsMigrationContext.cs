@@ -43,25 +43,25 @@ namespace VstsSyncMigrator.Engine
         {
 
             ITestPlanCollection sourcePlans = sourceTestStore.GetTestPlans();
-            Trace.WriteLine(string.Format("Plan to copy {0} Plans?", sourcePlans.Count), "TestPlansAndSuites");
+            Trace.WriteLine(string.Format("Plan to copy {0} Plans?", sourcePlans.Count), Name);
             foreach (ITestPlan sourcePlan in sourcePlans)
             {
                 string newPlanName = string.Format("{0}-{1}", sourceWitStore.GetProject().Name, sourcePlan.Name);
-                Trace.WriteLine(string.Format("Process Plan {0} - ", newPlanName), "TestPlansAndSuites");
+                Trace.WriteLine(string.Format("Process Plan {0} - ", newPlanName), Name);
                 ITestPlan targetPlan = FindTestPlan(targetTestStore, newPlanName);
                 if (targetPlan == null)
                 {
-                    Trace.WriteLine("    Plan missing...creating", "TestPlansAndSuites");
+                    Trace.WriteLine("    Plan missing...creating", Name);
                     targetPlan = CreateNewTestPlanFromSource(sourcePlan, newPlanName);
                     targetPlan.Save();
                 }
                 else
                 {
-                    Trace.WriteLine("    Plan found", "TestPlansAndSuites");
+                    Trace.WriteLine("    Plan found", Name);
                 }
                 if (HasChildSuits(sourcePlan.RootSuite))
                 {
-                    Trace.WriteLine(string.Format("    Source Plan has {0} Suites", sourcePlan.RootSuite.Entries.Count), "TestPlansAndSuites");
+                    Trace.WriteLine(string.Format("    Source Plan has {0} Suites", sourcePlan.RootSuite.Entries.Count), Name);
                     foreach (ITestSuiteBase sourcerSuiteChild in sourcePlan.RootSuite.SubSuites)
                     {
                         ProcessStaticSuite(sourcerSuiteChild, targetPlan.RootSuite, targetPlan);
@@ -74,7 +74,7 @@ namespace VstsSyncMigrator.Engine
 
         private void ProcessStaticSuite(ITestSuiteBase sourceSuit, ITestSuiteBase targetParent, ITestPlan targetPlan)
         {
-            Trace.WriteLine(string.Format("    Processing {0} : {1} - {2} ", sourceSuit.TestSuiteType.ToString(), sourceSuit.Id, sourceSuit.Title), "TestPlansAndSuites");
+            Trace.WriteLine(string.Format("    Processing {0} : {1} - {2} ", sourceSuit.TestSuiteType.ToString(), sourceSuit.Id, sourceSuit.Title), Name);
             ITestSuiteBase targetSuitChild = FindSuiteEntry((IStaticTestSuite)targetParent, sourceSuit.Title);
             if (targetSuitChild == null)
             {
@@ -99,12 +99,12 @@ namespace VstsSyncMigrator.Engine
                         }
                         catch (Exception)
                         {
-                            Trace.WriteLine("            Source workitem does not exist", "TestPlansAndSuites");
+                            Trace.WriteLine("            Source workitem does not exist", Name);
                             break;
                         }
                         try
                         {
-                            Trace.WriteLine("            Source workitem not migrated to target, cannot be found", "TestPlansAndSuites");
+                            Trace.WriteLine("            Source workitem not migrated to target, cannot be found", Name);
                             targetReq = targetWitStore.FindReflectedWorkItemByReflectedWorkItemId(sourceReq, me.ReflectedWorkItemIdFieldName);
                         }
                         catch (Exception)
@@ -126,7 +126,7 @@ namespace VstsSyncMigrator.Engine
             else
             {
                 // found
-                Trace.WriteLine("            Suite Exists", "TestPlansAndSuites");
+                Trace.WriteLine("            Suite Exists", Name);
                 ApplyConfigurations(sourceSuit.TestSuiteEntry, targetSuitChild.TestSuiteEntry);
                 if (targetSuitChild.IsDirty)
                 {
@@ -137,7 +137,7 @@ namespace VstsSyncMigrator.Engine
             // Recurse if Static Suite
             if (sourceSuit.TestSuiteType == TestSuiteType.StaticTestSuite && HasChildSuits(sourceSuit))
             {
-                Trace.WriteLine(string.Format("            Suite has {0} children", ((IStaticTestSuite)sourceSuit).Entries.Count), "TestPlansAndSuites");
+                Trace.WriteLine(string.Format("            Suite has {0} children", ((IStaticTestSuite)sourceSuit).Entries.Count), Name);
                 foreach (ITestSuiteBase sourceSuitChild in ((IStaticTestSuite)sourceSuit).SubSuites)
                 {
                     ProcessStaticSuite(sourceSuitChild, targetSuitChild, targetPlan);
@@ -153,15 +153,15 @@ namespace VstsSyncMigrator.Engine
         {
             if (source.TestSuiteType == TestSuiteType.StaticTestSuite && HasChildTestCases(source))
             {
-                Trace.WriteLine(string.Format("            Suite has {0} test cases", ((IStaticTestSuite)source).TestCases.Count), "TestPlansAndSuites");
+                Trace.WriteLine(string.Format("            Suite has {0} test cases", ((IStaticTestSuite)source).TestCases.Count), Name);
                 List<ITestCase> tcs = new List<ITestCase>();
                 foreach (ITestSuiteEntry sourceTestCaseEntry in source.TestCases)
                 {
-                    Trace.WriteLine(string.Format("    Processing {0} : {1} - {2} ", sourceTestCaseEntry.EntryType.ToString(), sourceTestCaseEntry.Id, sourceTestCaseEntry.Title), "TestPlansAndSuites");
+                    Trace.WriteLine(string.Format("    Processing {0} : {1} - {2} ", sourceTestCaseEntry.EntryType.ToString(), sourceTestCaseEntry.Id, sourceTestCaseEntry.Title), Name);
                     WorkItem wi = targetWitStore.FindReflectedWorkItem(sourceTestCaseEntry.TestCase.WorkItem, me.ReflectedWorkItemIdFieldName, false);
                     if (wi == null)
                     {
-                        Trace.WriteLine(string.Format("    ERROR NOT FOUND {0} : {1} - {2} ", sourceTestCaseEntry.EntryType.ToString(), sourceTestCaseEntry.Id, sourceTestCaseEntry.Title), "TestPlansAndSuites");
+                        Trace.WriteLine(string.Format("    ERROR NOT FOUND {0} : {1} - {2} ", sourceTestCaseEntry.EntryType.ToString(), sourceTestCaseEntry.Id, sourceTestCaseEntry.Title), Name);
                         break;
                     }
                     var exists = (from tc in target.TestCases
@@ -170,7 +170,7 @@ namespace VstsSyncMigrator.Engine
 
                     if (exists != null)
                     {
-                        Trace.WriteLine(string.Format("    EXISTS {0} : {1} - {2} ", sourceTestCaseEntry.EntryType.ToString(), sourceTestCaseEntry.Id, sourceTestCaseEntry.Title), "TestPlansAndSuites");
+                        Trace.WriteLine(string.Format("    EXISTS {0} : {1} - {2} ", sourceTestCaseEntry.EntryType.ToString(), sourceTestCaseEntry.Id, sourceTestCaseEntry.Title), Name);
                         ApplyConfigurations(sourceTestCaseEntry, exists);
                     }
                     else
@@ -178,13 +178,13 @@ namespace VstsSyncMigrator.Engine
                         ITestCase targetTestCase = targetTestStore.Project.TestCases.Find(wi.Id);
                         ApplyConfigurations(sourceTestCaseEntry, targetTestCase.TestSuiteEntry);
                         tcs.Add(targetTestCase);
-                        Trace.WriteLine(string.Format("    ADDING {0} : {1} - {2} ", sourceTestCaseEntry.EntryType.ToString(), sourceTestCaseEntry.Id, sourceTestCaseEntry.Title), "TestPlansAndSuites");
+                        Trace.WriteLine(string.Format("    ADDING {0} : {1} - {2} ", sourceTestCaseEntry.EntryType.ToString(), sourceTestCaseEntry.Id, sourceTestCaseEntry.Title), Name);
                     }
                 }
 
                 target.TestCases.AddCases(tcs);
                 targetPlan.Save();
-                Trace.WriteLine(string.Format("    SAVED {0} : {1} - {2} ", target.TestSuiteType.ToString(), target.Id, target.Title), "TestPlansAndSuites");
+                Trace.WriteLine(string.Format("    SAVED {0} : {1} - {2} ", target.TestSuiteType.ToString(), target.Id, target.Title), Name);
             }
         }
 
@@ -192,7 +192,7 @@ namespace VstsSyncMigrator.Engine
         {
             if (source.DefaultConfigurations != null)
             {
-                Trace.WriteLine("   CONFIG MNISSMATCH FOUND --- FIX AATTEMPTING", "TestPlansAndSuites");
+                Trace.WriteLine("   CONFIG MNISSMATCH FOUND --- FIX AATTEMPTING", Name);
                 target.ClearDefaultConfigurations();
                 IList<IdAndName> targetConfigs = new List<IdAndName>();
                 foreach (var sourceConfiguration in source.DefaultConfigurations)
@@ -224,7 +224,7 @@ namespace VstsSyncMigrator.Engine
             {
                 if (sourceEntry.Configurations.Count != targetEntry.Configurations.Count)
                 {
-                    Trace.WriteLine("   CONFIG MNISSMATCH FOUND --- FIX AATTEMPTING", "TestPlansAndSuites");
+                    Trace.WriteLine("   CONFIG MNISSMATCH FOUND --- FIX AATTEMPTING", Name);
                     targetEntry.Configurations.Clear();
                     IList<IdAndName> targetConfigs = new List<IdAndName>();
                     foreach (var sourceConfiguration in sourceEntry.Configurations)
@@ -279,7 +279,7 @@ namespace VstsSyncMigrator.Engine
             }
             catch (TestManagementValidationException ex)
             {
-                Trace.WriteLine(string.Format("            Unable to Create Requirement based Test Suit: {0}", ex.Message), "TestPlansAndSuites");
+                Trace.WriteLine(string.Format("            Unable to Create Requirement based Test Suit: {0}", ex.Message), Name);
                 return null;
             }
 
@@ -294,7 +294,7 @@ namespace VstsSyncMigrator.Engine
 
         private void SaveNewTestSuitToPlan(ITestPlan testPlan, IStaticTestSuite parent, ITestSuiteBase newTestSuite)
         {
-            Trace.WriteLine(string.Format("       Saving {0} : {1} - {2} ", newTestSuite.TestSuiteType.ToString(), newTestSuite.Id, newTestSuite.Title), "TestPlansAndSuites");
+            Trace.WriteLine(string.Format("       Saving {0} : {1} - {2} ", newTestSuite.TestSuiteType.ToString(), newTestSuite.Id, newTestSuite.Title), Name);
             try
             {
                 ((IStaticTestSuite)parent).Entries.Add(newTestSuite);
@@ -314,7 +314,7 @@ namespace VstsSyncMigrator.Engine
                           { "Title", newTestSuite.Title},
                           { "TestSuiteType", newTestSuite.TestSuiteType.ToString()}
                       });
-                Trace.WriteLine(string.Format("       FAILED {0} : {1} - {2} | {3}", newTestSuite.TestSuiteType.ToString(), newTestSuite.Id, newTestSuite.Title, ex.Message), "TestPlansAndSuites");
+                Trace.WriteLine(string.Format("       FAILED {0} : {1} - {2} | {3}", newTestSuite.TestSuiteType.ToString(), newTestSuite.Id, newTestSuite.Title, ex.Message), Name);
                 ITestSuiteBase ErrorSuitChild = targetTestStore.Project.TestSuites.CreateStatic();
                 ErrorSuitChild.TestSuiteEntry.Title = string.Format(@"BROKEN: {0} | {1}", newTestSuite.Title, ex.Message);
                 parent.Entries.Add(ErrorSuitChild);
