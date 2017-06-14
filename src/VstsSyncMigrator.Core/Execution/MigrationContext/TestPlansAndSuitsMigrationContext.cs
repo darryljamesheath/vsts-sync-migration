@@ -53,6 +53,8 @@ namespace VstsSyncMigrator.Engine
                     Trace.WriteLine("    Plan missing...creating", Name);
                     targetPlan = CreateNewTestPlanFromSource(sourcePlan, newPlanName);
                     targetPlan.Save();
+
+                    ApplyConfigurations(sourcePlan.RootSuite, targetPlan.RootSuite);
                 }
                 else
                 {
@@ -198,7 +200,7 @@ namespace VstsSyncMigrator.Engine
             if (source.DefaultConfigurations != null)
             {
                 Trace.WriteLine("   CONFIG MNISSMATCH FOUND --- FIX AATTEMPTING", Name);
-                target.ClearDefaultConfigurations();
+
                 IList<IdAndName> targetConfigs = new List<IdAndName>();
                 foreach (var sourceConfiguration in source.DefaultConfigurations)
                 {
@@ -208,13 +210,17 @@ namespace VstsSyncMigrator.Engine
 
                     if (targetFound != null)
                     {
-
                         targetConfigs.Add(new IdAndName(targetFound.Id, targetFound.Name));
                     }
                 }
 
                 try
                 {
+                    if (!target.IsRoot)
+                    {
+                        target.ClearDefaultConfigurations();
+                    }
+
                     target.SetDefaultConfigurations(targetConfigs);
                 }
                 catch (Exception)
