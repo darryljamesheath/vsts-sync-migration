@@ -41,7 +41,6 @@ namespace VstsSyncMigrator.Engine
 
         internal override void InternalExecute()
         {
-
             ITestPlanCollection sourcePlans = sourceTestStore.GetTestPlans();
             Trace.WriteLine(string.Format("Plan to copy {0} Plans?", sourcePlans.Count), Name);
             foreach (ITestPlan sourcePlan in sourcePlans)
@@ -59,6 +58,7 @@ namespace VstsSyncMigrator.Engine
                 {
                     Trace.WriteLine("    Plan found", Name);
                 }
+
                 if (HasChildSuits(sourcePlan.RootSuite))
                 {
                     Trace.WriteLine(string.Format("    Source Plan has {0} Suites", sourcePlan.RootSuite.Entries.Count), Name);
@@ -66,6 +66,7 @@ namespace VstsSyncMigrator.Engine
                     {
                         ProcessStaticSuite(sourcerSuiteChild, targetPlan.RootSuite, targetPlan);
                     }
+
                     // Add Test Cases
                     ProcessChildTestCases(sourcePlan.RootSuite, targetPlan.RootSuite, targetPlan);
                 }
@@ -118,7 +119,11 @@ namespace VstsSyncMigrator.Engine
                         throw new NotImplementedException();
                 }
 
-                if (targetSuitChild == null) { return; }
+                if (targetSuitChild == null)
+                {
+                    return;
+                }
+
                 // Add to tareget and Save
                 ApplyConfigurations(sourceSuit.TestSuiteEntry, targetSuitChild.TestSuiteEntry);
                 SaveNewTestSuitToPlan(targetPlan, (IStaticTestSuite)targetParent, targetSuitChild);
@@ -141,7 +146,6 @@ namespace VstsSyncMigrator.Engine
                 foreach (ITestSuiteBase sourceSuitChild in ((IStaticTestSuite)sourceSuit).SubSuites)
                 {
                     ProcessStaticSuite(sourceSuitChild, targetSuitChild, targetPlan);
-
                 }
             }
 
@@ -164,6 +168,7 @@ namespace VstsSyncMigrator.Engine
                         Trace.WriteLine(string.Format("    ERROR NOT FOUND {0} : {1} - {2} ", sourceTestCaseEntry.EntryType.ToString(), sourceTestCaseEntry.Id, sourceTestCaseEntry.Title), Name);
                         break;
                     }
+
                     var exists = (from tc in target.TestCases
                                   where tc.TestCase.WorkItem.Id == wi.Id
                                   select tc).SingleOrDefault();
@@ -207,6 +212,7 @@ namespace VstsSyncMigrator.Engine
                         targetConfigs.Add(new IdAndName(targetFound.Id, targetFound.Name));
                     }
                 }
+
                 try
                 {
                     target.SetDefaultConfigurations(targetConfigs);
@@ -220,33 +226,30 @@ namespace VstsSyncMigrator.Engine
 
         private void ApplyConfigurations(ITestSuiteEntry sourceEntry, ITestSuiteEntry targetEntry)
         {
-            if (sourceEntry.Configurations != null)
+            if (sourceEntry.Configurations != null && sourceEntry.Configurations.Count != targetEntry.Configurations.Count)
             {
-                if (sourceEntry.Configurations.Count != targetEntry.Configurations.Count)
+                Trace.WriteLine("   CONFIG MNISSMATCH FOUND --- FIX AATTEMPTING", Name);
+                targetEntry.Configurations.Clear();
+                IList<IdAndName> targetConfigs = new List<IdAndName>();
+                foreach (var sourceConfiguration in sourceEntry.Configurations)
                 {
-                    Trace.WriteLine("   CONFIG MNISSMATCH FOUND --- FIX AATTEMPTING", Name);
-                    targetEntry.Configurations.Clear();
-                    IList<IdAndName> targetConfigs = new List<IdAndName>();
-                    foreach (var sourceConfiguration in sourceEntry.Configurations)
-                    {
-                        var targetFound = (from tc in targetTestConfigs
-                                           where tc.Name == sourceConfiguration.Name
-                                           select tc).SingleOrDefault();
+                    var targetFound = (from tc in targetTestConfigs
+                                       where tc.Name == sourceConfiguration.Name
+                                       select tc).SingleOrDefault();
 
-                        if (targetFound != null)
-                        {
+                    if (targetFound != null)
+                    {
+                        targetConfigs.Add(new IdAndName(targetFound.Id, targetFound.Name));
+                    }
+                }
 
-                            targetConfigs.Add(new IdAndName(targetFound.Id, targetFound.Name));
-                        }
-                    }
-                    try
-                    {
-                        targetEntry.SetConfigurations(targetConfigs);
-                    }
-                    catch (Exception)
-                    {
-                        // SOmetimes this will error out for no reason.
-                    }
+                try
+                {
+                    targetEntry.SetConfigurations(targetConfigs);
+                }
+                catch (Exception)
+                {
+                    // SOmetimes this will error out for no reason.
                 }
             }
         }
@@ -258,7 +261,6 @@ namespace VstsSyncMigrator.Engine
 
         private ITestSuiteBase CreateNewDynamicTestSuite(ITestSuiteBase source)
         {
-
             IDynamicTestSuite targetSuitChild = targetTestStore.Project.TestSuites.CreateDynamic();
             if (source.TestSuiteEntry.Configurations != null)
             {
@@ -297,7 +299,7 @@ namespace VstsSyncMigrator.Engine
             Trace.WriteLine(string.Format("       Saving {0} : {1} - {2} ", newTestSuite.TestSuiteType.ToString(), newTestSuite.Id, newTestSuite.Title), Name);
             try
             {
-                ((IStaticTestSuite)parent).Entries.Add(newTestSuite);
+                parent.Entries.Add(newTestSuite);
             }
             catch (TestManagementServerException ex)
             {
@@ -330,6 +332,7 @@ namespace VstsSyncMigrator.Engine
             {
                 ApplyConfigurations(source, targetSuitChild);
             }
+
             targetSuitChild.TestSuiteEntry.Title = source.TestSuiteEntry.Title;
             return targetSuitChild;
         }
@@ -346,6 +349,7 @@ namespace VstsSyncMigrator.Engine
             {
                 hasChildren = (((IStaticTestSuite)sourceSuit).Entries.Count > 0);
             }
+
             return hasChildren;
         }
 
