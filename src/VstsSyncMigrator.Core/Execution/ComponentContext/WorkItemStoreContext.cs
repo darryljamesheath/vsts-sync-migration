@@ -55,6 +55,7 @@ namespace VstsSyncMigrator.Engine
         {
             return string.Format("{0}/{1}/{2}", wi.Store.TeamProjectCollection.Uri, wi.Project.Name, wi.Id);
         }
+
         public int GetReflectedWorkItemId(WorkItem wi, string reflectedWotkItemIdField)
         {
             string rwiid = wi.Fields[reflectedWotkItemIdField].Value.ToString();
@@ -64,8 +65,6 @@ namespace VstsSyncMigrator.Engine
             }
             return 0;
         }
-
-  
 
         public WorkItem FindReflectedWorkItem(WorkItem workItemToFind, string reflectedWotkItemIdField, bool cache)
         {
@@ -153,5 +152,13 @@ namespace VstsSyncMigrator.Engine
             return Store.GetWorkItem(workItem.Id, revision);
         }
 
+        public WorkItemCollection GetAllReflectedWorkItemsByItemType(string reflectedWorkItemIdFieldName, string workItemType)
+        {
+            var query = new TfsQueryContext(this);
+            query.Query = $@"SELECT [System.Id] FROM WorkItems  WHERE [System.TeamProject]=@TeamProject AND [{reflectedWorkItemIdFieldName}] != '' AND [System.WorkItemType] = @WorkItemType";
+            query.AddParameter("TeamProject", targetTfs.Name);
+            query.AddParameter("WorkItemType", workItemType);
+            return query.Execute();
+        }
     }
 }

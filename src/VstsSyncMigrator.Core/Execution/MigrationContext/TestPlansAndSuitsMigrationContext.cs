@@ -19,6 +19,7 @@ namespace VstsSyncMigrator.Engine
         private readonly TestManagementContext targetTestStore;
         private readonly ITestConfigurationCollection targetTestConfigs;
         private readonly TestPlansAndSuitsMigrationConfig config;
+        private WorkItemCollection targetTestCases;
 
         public override string Name
         {
@@ -164,7 +165,7 @@ namespace VstsSyncMigrator.Engine
                 foreach (ITestSuiteEntry sourceTestCaseEntry in source.TestCases)
                 {
                     Trace.WriteLine(string.Format("    Processing {0} : {1} - {2} ", sourceTestCaseEntry.EntryType.ToString(), sourceTestCaseEntry.Id, sourceTestCaseEntry.Title), Name);
-                    WorkItem wi = targetWitStore.FindReflectedWorkItem(sourceTestCaseEntry.TestCase.WorkItem, me.ReflectedWorkItemIdFieldName, false);
+                    WorkItem wi = GetTargetTestCase(sourceTestCaseEntry.TestCase.WorkItem);
                     if (wi == null)
                     {
                         Trace.WriteLine(string.Format("    ERROR NOT FOUND {0} : {1} - {2} ", sourceTestCaseEntry.EntryType.ToString(), sourceTestCaseEntry.Id, sourceTestCaseEntry.Title), Name);
@@ -410,6 +411,25 @@ namespace VstsSyncMigrator.Engine
             }
 
             return text;
+        }
+
+        private WorkItem GetTargetTestCase(WorkItem workItem)
+        {
+            if (targetTestCases == null)
+            {
+                targetTestCases = targetWitStore.GetAllReflectedWorkItemsByItemType(me.ReflectedWorkItemIdFieldName, "Test Case");
+            }
+
+            var reflectedWorkItemId = targetWitStore.CreateReflectedWorkItemId(workItem);
+            foreach (WorkItem targetTestCase in targetTestCases)
+            {
+                if (targetTestCase.Fields[me.ReflectedWorkItemIdFieldName].Value.ToString() == reflectedWorkItemId)
+                {
+                    return targetTestCase;
+                }
+            }
+
+            return null;
         }
     }
 }
