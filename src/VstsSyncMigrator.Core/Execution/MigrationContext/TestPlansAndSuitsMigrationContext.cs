@@ -85,7 +85,7 @@ namespace VstsSyncMigrator.Engine
                 switch (sourceSuit.TestSuiteType)
                 {
                     case TestSuiteType.DynamicTestSuite:
-                        targetSuitChild = CreateNewDynamicTestSuite(sourceSuit);
+                        targetSuitChild = CreateNewDynamicTestSuite((IDynamicTestSuite)sourceSuit);
                         break;
 
                     case TestSuiteType.StaticTestSuite:
@@ -265,17 +265,28 @@ namespace VstsSyncMigrator.Engine
             return sourceSuit.TestCaseCount > 0;
         }
 
-        private ITestSuiteBase CreateNewDynamicTestSuite(ITestSuiteBase source)
+        private ITestSuiteBase CreateNewDynamicTestSuite(IDynamicTestSuite source)
         {
-            IDynamicTestSuite targetSuitChild = targetTestStore.Project.TestSuites.CreateDynamic();
+            IDynamicTestSuite targetSuiteChild = targetTestStore.Project.TestSuites.CreateDynamic();
+            targetSuiteChild.TestSuiteEntry.Title = source.TestSuiteEntry.Title;
+
             if (source.TestSuiteEntry.Configurations != null)
             {
-                ApplyConfigurations(source, targetSuitChild);
+                ApplyConfigurations(source, targetSuiteChild);
             }
 
-            targetSuitChild.TestSuiteEntry.Title = source.TestSuiteEntry.Title;
-            targetSuitChild.Query = ((IDynamicTestSuite)source).Query;
-            return targetSuitChild;
+            if (config.PrefixProjectToNodes)
+            {
+                var queryText = ReplaceAreaIterationPaths(source.Query.QueryText);
+                var newQuery = targetTestStore.Project.CreateTestQuery(queryText);
+                targetSuiteChild.Query = newQuery;
+            }
+            else
+            {
+                targetSuiteChild.Query = source.Query;
+            }
+
+            return targetSuiteChild;
         }
 
         private ITestSuiteBase CreateNewRequirementTestSuite(ITestSuiteBase source, WorkItem requirement)
@@ -385,6 +396,20 @@ namespace VstsSyncMigrator.Engine
         private ITestPlan FindTestPlan(TestManagementContext tmc, string name)
         {
             return (from p in tmc.Project.TestPlans.Query("Select * From TestPlan") where p.Name == name select p).SingleOrDefault();
+        }
+
+        private string ReplaceAreaIterationPaths(string text)
+        {
+            var regex = new Regex(@"(\[System.(AreaPath|IterationPath)])[ ]*([Uu][Nn][Dd][Ee][Rr]|[Nn][Oo][Tt] [Uu][Nn][Dd][Ee][Rr]|=|<>|[Ii][Nn])[ ]*'([^\']*)'");
+            if (regex.IsMatch(text))
+            {
+                return regex.Replace(text, match =>
+                {
+                    return match.Value.Replace(" '", $" '{engine.Target.Name}\\");
+                });
+            }
+
+            return text;
         }
     }
 }
