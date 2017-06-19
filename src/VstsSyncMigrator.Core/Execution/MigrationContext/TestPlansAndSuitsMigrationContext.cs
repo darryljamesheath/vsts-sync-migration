@@ -184,7 +184,7 @@ namespace VstsSyncMigrator.Engine
                     else
                     {
                         ITestCase targetTestCase = targetTestStore.Project.TestCases.Find(wi.Id);
-                        ApplyConfigurations(sourceTestCaseEntry, targetTestCase.TestSuiteEntry);
+                        ApplyConfigurations(sourceTestCaseEntry, target.TestSuiteEntry);
                         tcs.Add(targetTestCase);
                         Trace.WriteLine(string.Format("    ADDING {0} : {1} - {2} ", sourceTestCaseEntry.EntryType.ToString(), sourceTestCaseEntry.Id, sourceTestCaseEntry.Title), Name);
                     }
@@ -218,9 +218,9 @@ namespace VstsSyncMigrator.Engine
                 try
                 {
                     if (!target.IsRoot)
-                    {
-                        target.ClearDefaultConfigurations();
-                    }
+                {
+                    target.ClearDefaultConfigurations();
+                }
 
                     target.SetDefaultConfigurations(targetConfigs);
                 }
@@ -233,10 +233,15 @@ namespace VstsSyncMigrator.Engine
 
         private void ApplyConfigurations(ITestSuiteEntry sourceEntry, ITestSuiteEntry targetEntry)
         {
-            if (sourceEntry.Configurations != null && sourceEntry.Configurations.Count != targetEntry.Configurations.Count)
+            if (sourceEntry.Configurations != null)
             {
                 Trace.WriteLine("   CONFIG MNISSMATCH FOUND --- FIX AATTEMPTING", Name);
-                targetEntry.Configurations.Clear();
+
+                if (targetEntry.Configurations != null)
+                {
+                    targetEntry.Configurations.Clear();
+                }
+
                 IList<IdAndName> targetConfigs = new List<IdAndName>();
                 foreach (var sourceConfiguration in sourceEntry.Configurations)
                 {
