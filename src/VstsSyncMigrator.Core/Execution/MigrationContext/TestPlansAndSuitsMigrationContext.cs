@@ -200,6 +200,13 @@ namespace VstsSyncMigrator.Engine
         {
             if (source.DefaultConfigurations != null)
             {
+                if (target.DefaultConfigurations != null
+                    && source.DefaultConfigurations.Count == target.DefaultConfigurations.Count
+                    && source.DefaultConfigurations.All(s => target.DefaultConfigurations.Any(t => t.Name == s.Name)))
+                {
+                    return;
+                }
+
                 Trace.WriteLine("   CONFIG MNISSMATCH FOUND --- FIX AATTEMPTING", Name);
 
                 IList<IdAndName> targetConfigs = new List<IdAndName>();
@@ -218,9 +225,9 @@ namespace VstsSyncMigrator.Engine
                 try
                 {
                     if (!target.IsRoot)
-                {
-                    target.ClearDefaultConfigurations();
-                }
+                    {
+                        target.ClearDefaultConfigurations();
+                    }
 
                     target.SetDefaultConfigurations(targetConfigs);
                 }
@@ -235,6 +242,13 @@ namespace VstsSyncMigrator.Engine
         {
             if (sourceEntry.Configurations != null)
             {
+                if (targetEntry.Configurations != null
+                    && sourceEntry.Configurations.Count == targetEntry.Configurations.Count
+                    && sourceEntry.Configurations.All(s => targetEntry.Configurations.Any(t => t.Name == s.Name)))
+                {
+                    return;
+                }
+
                 Trace.WriteLine("   CONFIG MNISSMATCH FOUND --- FIX AATTEMPTING", Name);
 
                 if (targetEntry.Configurations != null)
