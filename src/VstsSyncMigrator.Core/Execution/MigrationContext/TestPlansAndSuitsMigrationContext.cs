@@ -207,7 +207,7 @@ namespace VstsSyncMigrator.Engine
                     return;
                 }
 
-                Trace.WriteLine("   CONFIG MNISSMATCH FOUND --- FIX AATTEMPTING", Name);
+                Trace.WriteLine($"{target.Title}...configuration mismatch...fixing", Name);
 
                 IList<IdAndName> targetConfigs = new List<IdAndName>();
                 foreach (var sourceConfiguration in source.DefaultConfigurations)
@@ -230,10 +230,11 @@ namespace VstsSyncMigrator.Engine
                     }
 
                     target.SetDefaultConfigurations(targetConfigs);
+                    Trace.WriteLine($"{target.Title}...configuration mismatch...fixing...success", Name);
                 }
-                catch (Exception)
+                catch (Exception ex)
                 {
-                    // SOmetimes this will error out for no reason.
+                    Trace.WriteLine($"{target.Title}...configuration mismatch...fixing...failed...{ex.Message}", Name);
                 }
             }
         }
@@ -249,8 +250,7 @@ namespace VstsSyncMigrator.Engine
                     return;
                 }
 
-                Trace.WriteLine("   CONFIG MNISSMATCH FOUND --- FIX AATTEMPTING", Name);
-
+                Trace.WriteLine($"{targetEntry.Title}...configuration mismatch...fixing", Name);
                 if (targetEntry.Configurations != null)
                 {
                     targetEntry.Configurations.Clear();
@@ -272,10 +272,11 @@ namespace VstsSyncMigrator.Engine
                 try
                 {
                     targetEntry.SetConfigurations(targetConfigs);
+                    Trace.WriteLine($"{targetEntry.Title}...configuration mismatch...fixing...success", Name);
                 }
-                catch (Exception)
+                catch (Exception ex)
                 {
-                    // SOmetimes this will error out for no reason.
+                    Trace.WriteLine($"{targetEntry.Title}...configuration mismatch...fixing...failed...{ex.Message}", Name);
                 }
             }
         }
@@ -333,10 +334,12 @@ namespace VstsSyncMigrator.Engine
 
         private void SaveNewTestSuitToPlan(ITestPlan testPlan, IStaticTestSuite parent, ITestSuiteBase newTestSuite)
         {
-            Trace.WriteLine(string.Format("       Saving {0} : {1} - {2} ", newTestSuite.TestSuiteType.ToString(), newTestSuite.Id, newTestSuite.Title), Name);
+            Trace.WriteLine($"{newTestSuite.Title}...saving {newTestSuite.TestSuiteType.ToString()}", Name);
+
             try
             {
                 parent.Entries.Add(newTestSuite);
+                Trace.WriteLine($"{newTestSuite.Title}...saving {newTestSuite.TestSuiteType.ToString()}...success", Name);
             }
             catch (TestManagementServerException ex)
             {
@@ -353,7 +356,9 @@ namespace VstsSyncMigrator.Engine
                           { "Title", newTestSuite.Title},
                           { "TestSuiteType", newTestSuite.TestSuiteType.ToString()}
                       });
-                Trace.WriteLine(string.Format("       FAILED {0} : {1} - {2} | {3}", newTestSuite.TestSuiteType.ToString(), newTestSuite.Id, newTestSuite.Title, ex.Message), Name);
+
+                Trace.WriteLine($"{newTestSuite.Title}...saving {newTestSuite.TestSuiteType.ToString()}...failed...{ex.Message}", Name);
+
                 ITestSuiteBase ErrorSuitChild = targetTestStore.Project.TestSuites.CreateStatic();
                 ErrorSuitChild.TestSuiteEntry.Title = string.Format(@"BROKEN: {0} | {1}", newTestSuite.Title, ex.Message);
                 parent.Entries.Add(ErrorSuitChild);
