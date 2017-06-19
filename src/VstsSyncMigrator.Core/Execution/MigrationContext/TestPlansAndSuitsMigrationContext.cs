@@ -184,7 +184,7 @@ namespace VstsSyncMigrator.Engine
                     else
                     {
                         ITestCase targetTestCase = targetTestStore.Project.TestCases.Find(wi.Id);
-                        ApplyConfigurations(sourceTestCaseEntry, target.TestSuiteEntry);
+                        ApplyConfigurations(sourceTestCaseEntry, targetTestCase.TestSuiteEntry);
                         tcs.Add(targetTestCase);
                         Trace.WriteLine(string.Format("    ADDING {0} : {1} - {2} ", sourceTestCaseEntry.EntryType.ToString(), sourceTestCaseEntry.Id, sourceTestCaseEntry.Title), Name);
                     }
